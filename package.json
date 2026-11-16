@@ -1,0 +1,42 @@
+{
+  "name": "piano-app",
+  "productName": "Piano App",
+  "version": "1.0.0",
+  "description": "Aprende piano desde cero: notas que caen, pentagrama y validación por micrófono",
+  "author": "Haise-IDK7",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit && vite build",
+    "test": "vitest run",
+    "start": "npm run build && electron .",
+    "dist:win": "npm run build && electron-builder --win nsis portable --publish never"
+  },
+  "devDependencies": {
+    "@tonejs/midi": "^2.0.28",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "electron": "^45.3.2",
+    "electron-builder": "^26.18.0",
+    "fflate": "^0.8.3",
+    "idb-keyval": "^6.3.0",
+    "jsdom": "^31.0.1",
+    "pitchy": "^4.1.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.0",
+    "zustand": "^5.1.0"
+  },
+  "homepage": "https://github.com/Haise-IDK7/Piano-app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Haise-IDK7/Piano-app.git"
+  }
+}

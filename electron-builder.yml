@@ -1,0 +1,28 @@
+appId: com.haise.pianoapp
+productName: Piano App
+copyright: Copyright © 2026 Haise-IDK7
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**
+  - electron/**
+  - package.json
+asar: true
+win:
+  icon: build/icon.png
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Piano App
+  artifactName: Piano-App-Setup-${version}.${ext}
+portable:
+  artifactName: Piano-App-Portable-${version}.${ext}

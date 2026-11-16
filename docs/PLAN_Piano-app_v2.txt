@@ -1,0 +1,266 @@
+===============================================================================
+ PLAN MAESTRO v2 — "Piano-app"
+ Aplicación de escritorio (Windows .exe) para aprender piano desde cero
+ Repositorio: https://github.com/Haise-IDK7/Piano-app
+ Fecha: 2026-11-15  ·  Sustituye al plan v1
+===============================================================================
+
+Convención de confianza:
+  [Seguro]     = verificado / técnicamente sólido
+  [Probable]   = inferencia fuerte, validar con el teclado real
+  [Suposición] = falta información del usuario; debe ser configurable
+
+-------------------------------------------------------------------------------
+0. QUÉ CAMBIA RESPECTO AL PLAN v1 (Y POR QUÉ)
+-------------------------------------------------------------------------------
+
+C1. EL MICRÓFONO PASA A SER LA VÍA PRINCIPAL, NO EL "PLAN B".
+    El flujo real del usuario es: ve la guía en la pantalla del PC → toca en
+    el teclado → el micrófono del PC escucha → la app valida. El plan v1
+    estaba diseñado alrededor de MIDI y trataba el audio como fase 5. Ahora
+    el motor de escucha es parte del MVP y todo el diseño se ajusta a sus
+    límites reales:
+      - Nota suelta por micrófono: fiable. [Seguro]
+      - Acordes por micrófono: detectar "qué notas arbitrarias suenan" es un
+        problema abierto y poco fiable; pero VERIFICAR si suenan unas notas
+        CONCRETAS que la app ya espera es mucho más fácil. [Seguro] Por eso
+        el motor usa "detección dirigida": no transcribe, comprueba.
+      - Consecuencia honesta: con micrófono la app confirma bien los
+        aciertos; los ERRORES solo se marcan con certeza cuando se espera una
+        nota suelta. En acordes, la app espera a oír las notas correctas en
+        vez de acusar notas equivocadas. [Seguro]
+      - El modo ESPERA es el modo por defecto con micrófono (sin presión de
+        tiempo, inmune a la latencia). El modo TIEMPO REAL existe pero con
+        ventanas de tiempo más anchas en micrófono. [Probable]
+
+C2. "PARTITURAS EN PANTALLA" = DOS VISTAS DE LA MISMA CANCIÓN.
+    [Suposición] "partituras" se interpreta como "la guía visual de qué
+    tocar". Se ofrecen dos vistas intercambiables con una tecla (V):
+      a) CASCADA (notas que caen, estilo Synthesia) — por defecto.
+      b) PENTAGRAMA SIMPLIFICADO: doble pentagrama (Sol/Fa) que avanza en
+         horizontal, con cabezas de nota coloreadas por mano, alteraciones y
+         el nombre de la nota. No es notación completa (sin figuras rítmicas:
+         la duración se dibuja como una barra), pero enseña DÓNDE vive cada
+         nota en el pentagrama, que es el primer paso para leer.
+    La partitura "de imprenta" (figuras, compases, ligaduras) queda en la
+    hoja de ruta (OpenSheetMusicDisplay sobre MusicXML).
+
+C3. FORMATOS DE CANCIONES (resultado de la investigación).
+    Un PDF o una foto de partitura NO sirve: es una imagen, la app no puede
+    saber qué notas contiene. Tampoco un mp3 de la canción completa (voz +
+    banda): la transcripción automática de mezclas es mediocre. [Seguro]
+    Formatos que SÍ funcionan, por orden de recomendación:
+      1) MIDI (.mid / .midi) — RECOMENDADO. Es el formato más abundante para
+         canciones famosas; contiene nota, inicio y duración exactos. No
+         guarda qué mano toca: se deduce por pista o por punto de división.
+      2) MusicXML (.musicxml / .xml / .mxl comprimido) — EL MEJOR CUANDO
+         EXISTE. Es el formato de intercambio de partituras (MuseScore,
+         Sibelius, Finale, Dorico lo exportan). Sí guarda mano (pentagrama 1
+         = derecha, 2 = izquierda), compases y tonalidad.
+      3) TEXTO DE NOTAS — exclusivo de esta app. Muchas webs publican
+         canciones como "Mi Mi Fa Sol Sol Fa Mi Re". Se pega el texto y la
+         app lo convierte en tutorial. Sintaxis en la sección 5.
+      4) .pianoapp.json — formato propio para exportar/compartir.
+    Flujo de conversión: archivo → SongDoc interno → ajuste al rango del
+    teclado → separación de manos → secciones automáticas → tutorial listo
+    (cascada + pentagrama + modos de práctica).
+
+C4. BUSCAR LA CANCIÓN QUE QUIERO APRENDER.
+    La app no puede incluir ni descargar por su cuenta arreglos con derechos
+    de autor. Solución legal y práctica:
+      - Buscador interno sobre la biblioteca incluida + importadas.
+      - Panel "Buscar en internet": el usuario escribe el nombre y la app
+        abre en el navegador la búsqueda ya hecha en fuentes de MIDI/MusicXML
+        (MuseScore, BitMidi, búsqueda web "<canción> piano midi", y
+        "<canción> notas piano" para el formato de texto). El usuario
+        descarga el archivo y lo ARRASTRA a la ventana de la app.
+      - Arrastrar y soltar en cualquier pantalla importa el archivo.
+
+C5. STACK SIMPLIFICADO PARA REDUCIR RIESGO (decisiones cerradas v2).
+      - Electron + Vite + React + TypeScript estricto. Proceso main en JS
+        plano (sin paso de compilación propio).
+      - Render de cascada y pentagrama en Canvas2D (suficiente para este
+        volumen de notas; PixiJS se descarta por ahora).
+      - Sonido: sintetizador propio con Web Audio (sin muestras externas →
+        instalador pequeño, 100% offline, sin licencias de terceros).
+      - Detección de tono: pitchy (McLeod) para nota suelta + verificación
+        espectral dirigida propia (FFT) para acordes.
+      - MIDI: @tonejs/midi. MXL: fflate. Estado: Zustand con persistencia.
+      - Sin módulos nativos. Sin Tailwind/shadcn (CSS propio).
+      - Textos en español directamente (i18n pasa a hoja de ruta).
+
+C6. ALCANCE REALISTA. El plan v1 no distinguía entre "primera versión que
+    funciona" y "todo lo imaginable". v2 separa v1.0 (construida ahora) de
+    la hoja de ruta (sección 9).
+
+-------------------------------------------------------------------------------
+1. SUPUESTOS CRÍTICOS
+-------------------------------------------------------------------------------
+S1. [Suposición] El teclado es de hogar, 49–61 teclas, con parlantes y
+    probablemente sin MIDI. La app soporta 4 entradas intercambiables detrás
+    de una interfaz común: MICRÓFONO (principal), MIDI (si existe; es más
+    preciso), TECLADO DEL PC y CLIC en el teclado virtual (para probar).
+S2. [Probable] El micrófono del portátil capta bien el teclado si está a
+    menos de ~1 m y la habitación es silenciosa. Mejora grande y barata:
+    cable de audio de la salida PHONES del teclado a la entrada de línea/mic
+    del PC. La app lo explica en el asistente.
+S3. [Seguro] El sonido de la propia app se cuela en el micrófono y produce
+    falsos aciertos. En modo micrófono la app silencia por defecto su propio
+    sonido durante la práctica, salvo que el usuario indique que usa
+    audífonos en el PC.
+S4. [Seguro] Chromium aplica cancelación de eco, supresión de ruido y
+    ganancia automática al micrófono; alteran el timbre. Se desactivan.
+S5. [Probable] El teclado no es sensible al tacto: ninguna evaluación
+    depende de la intensidad.
+S6. [Probable] Notas muy graves (por debajo de Do2) se detectan peor por
+    micrófono; el ajuste automático de rango ayuda al subir de octava.
+
+-------------------------------------------------------------------------------
+2. ARQUITECTURA
+-------------------------------------------------------------------------------
+Piano-app/
+├─ .github/workflows/  ci.yml (tests+build)  ·  release.yml (.exe por tag)
+├─ electron/           main.cjs (ventana, permisos mic/MIDI, enlaces
+│                      externos) · preload.cjs
+├─ src/
+│   ├─ engine/         TypeScript puro, sin React, con tests
+│   │   ├─ theory.ts        nombres de notas (Do-Re-Mi / C-D-E), acordes
+│   │   ├─ song.ts          SongDoc, eventos, secciones, ajuste de rango,
+│   │   │                   separación de manos
+│   │   ├─ textFormat.ts    importador de "texto de notas"
+│   │   ├─ midiImport.ts    .mid → SongDoc
+│   │   ├─ musicxml.ts      .musicxml/.xml/.mxl → SongDoc
+│   │   ├─ fft.ts           FFT radix-2
+│   │   ├─ pitch.ts         detector: nota suelta + verificación dirigida
+│   │   ├─ matcher.ts       evaluación (espera / tiempo real)
+│   │   ├─ synth.ts         sonido de piano sintetizado + metrónomo
+│   │   └─ inputs.ts        MicInput, MidiInput, teclado PC
+│   ├─ content/        canciones de dominio público, lecciones, consejos
+│   ├─ ui/             pantallas React + lienzos Canvas
+│   └─ store.ts        ajustes, progreso, canciones importadas
+├─ tests/              Vitest
+└─ docs/               este plan
+Principios: el motor no importa React; la UI no evalúa; un único reloj
+(AudioContext.currentTime); todo funciona offline.
+
+-------------------------------------------------------------------------------
+3. MOTOR DE ESCUCHA POR MICRÓFONO (pieza crítica)
+-------------------------------------------------------------------------------
+Captura: getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,
+autoGainControl:false}}) → AnalyserNode → cada ~25 ms se lee una ventana.
+
+3.1 Ataque (onset): se sigue la energía RMS; hay "ataque" cuando sube con
+    fuerza respecto a un nivel reciente. Sin ataque nuevo no se cuenta una
+    nota nueva (así una nota sostenida no vale por dos).
+3.2 Nota suelta: McLeod (pitchy) sobre la ventana corta; se exige claridad
+    alta y estabilidad en 2 lecturas seguidas; Hz → nota MIDI.
+3.3 Verificación dirigida (acordes y también notas sueltas como refuerzo):
+    FFT con ventana de Hann. Para cada nota ESPERADA se mide la energía en
+    su fundamental y armónicos 2–3 y se compara con el nivel de fondo y con
+    los semitonos vecinos. Nota "presente" si destaca lo suficiente.
+    Acorde aceptado si están presentes todas sus notas (o N−1 de N cuando
+    N ≥ 3: tolerancia configurable).
+3.4 Tolerancia de octava (activada por defecto): Do3 tocado cuando se pedía
+    Do4 se acepta en micrófono; los timbres de teclados baratos confunden
+    la octava. [Probable]
+3.5 Error: solo cuando se espera UNA nota y se detecta con claridad otra
+    clase de nota distinta tras un ataque.
+3.6 Calibración: medidor de nivel, umbral de ruido automático (escucha 1 s
+    de silencio), prueba "toca el Do central", control de sensibilidad.
+3.7 Tests automáticos: se sintetizan notas y acordes con armónicos y ruido
+    y se exige que el detector acierte (ver tests/pitch.test.ts).
+
+-------------------------------------------------------------------------------
+4. PRÁCTICA
+-------------------------------------------------------------------------------
+Vistas: Cascada / Pentagrama (tecla V). Teclado virtual con el rango real.
+Color por mano (derecha verde, izquierda azul). Nombre de nota en cada barra.
+Modos:
+  VER        la app toca la canción; el usuario observa.
+  ESPERA     la canción se detiene en cada nota/acorde hasta oírlo bien.
+  TIEMPO     la canción avanza; se puntúa acierto y sincronía.
+Controles: play/pausa (Espacio), reiniciar (R), velocidad 30–150 % (↑/↓),
+mano (derecha / izquierda / ambas), la otra mano suena sola o en silencio,
+bucle por secciones (clic en la barra de secciones), metrónomo, vista (V).
+Políticas de error (modo TIEMPO): "marcar y seguir" o "repetir sección tras
+N errores". Escalera de tempo: en bucle, si la pasada sale ≥ 90 % sube 10 %
+la velocidad; si sale < 60 % la baja.
+Resumen al terminar: precisión, estrellas, notas más falladas, botón repetir.
+
+-------------------------------------------------------------------------------
+5. CANCIONES: BIBLIOTECA, IMPORTACIÓN Y BÚSQUEDA
+-------------------------------------------------------------------------------
+5.1 Biblioteca incluida: melodías de dominio público codificadas a mano
+    (Estrellita, Oda a la Alegría, Martinillo, Para Elisa (tema), Canon,
+    Greensleeves, etc.), con dificultad y dos manos donde aplica.
+5.2 Importar: botón o arrastrar-y-soltar .mid .midi .musicxml .xml .mxl
+    .txt .json. Asistente: vista previa, elección de manos por pista o por
+    punto de división, ajuste automático al rango del teclado, guardar.
+5.3 Texto de notas (pegar):
+      Mi Mi Fa Sol | Sol Fa Mi Re          notación latina o C D E
+      C4 D4 E4:2 -:1 [C4 E4 G4]:4          octava, duración en pulsos,
+                                           silencio (-), acorde [ ]
+      Cabeceras opcionales:  titulo: …   bpm: 100
+      Dos manos: líneas que empiezan por  D:  (derecha)  e  I:  (izquierda)
+5.4 Buscar: caja de búsqueda → filtra la biblioteca y ofrece botones que
+    abren el navegador con la búsqueda en fuentes externas de MIDI/MusicXML.
+5.5 Legal: la app no descarga nada; el usuario aporta sus archivos.
+
+-------------------------------------------------------------------------------
+6. CURSO DESDE CERO
+-------------------------------------------------------------------------------
+Lecciones cortas: explicación → la app demuestra → el usuario toca en modo
+espera → estrellas. Niveles: 0 conocer el teclado y el Do central · 1 cinco
+dedos mano derecha, mano izquierda, primeras melodías · 2 teclas negras,
+escala de Do, acordes Do/Fa/Sol/La menor · 3 dos manos.
+Consejos de práctica contextuales y "consejo del día".
+
+-------------------------------------------------------------------------------
+7. HERRAMIENTAS, PROGRESO Y AJUSTES
+-------------------------------------------------------------------------------
+Herramientas: afinador/probador de micrófono (muestra qué nota oye la app),
+juego libre, metrónomo, diccionario de acordes.
+Progreso: racha de días, minutos practicados, mejores resultados por
+canción, lecciones completadas.
+Ajustes: entrada (micrófono/MIDI/teclado PC), dispositivo de micrófono,
+sensibilidad, tolerancia de octava, "uso audífonos", número de teclas del
+teclado (49/54/61/76/88), notación (Do-Re-Mi o C-D-E), latencia (ms),
+borrar datos. Asistente de primer arranque con prueba de micrófono.
+
+-------------------------------------------------------------------------------
+8. CALIDAD Y ENTREGA
+-------------------------------------------------------------------------------
+Tests (Vitest): teoría, texto de notas, MusicXML, MIDI ida y vuelta, ajuste
+de rango, evaluador (espera/tiempo real), detector de tono con audio
+sintetizado. CI en cada push.
+Release: al empujar un tag vX.Y.Z, GitHub Actions (windows-latest) compila y
+adjunta al Release el instalador (.exe NSIS) y la versión portable.
+El .exe no está firmado: Windows SmartScreen mostrará un aviso → "Más
+información → Ejecutar de todas formas". [Seguro]
+
+-------------------------------------------------------------------------------
+9. HOJA DE RUTA (NO incluido en v1.0)
+-------------------------------------------------------------------------------
+R1. Partitura de imprenta real (OpenSheetMusicDisplay sobre MusicXML).
+R2. Audio → MIDI (basic-pitch) para grabaciones de piano solo.
+R3. Video de notas cayendo → MIDI (captura de ventana + análisis de color).
+R4. Editor piano-roll para corregir importaciones.
+R5. Muestras de piano reales (Salamander, CC-BY) como paquete opcional.
+R6. Minijuegos (oído, ritmo), logros, repaso espaciado.
+R7. Políticas de error adicionales (corrector guiado con demostración).
+R8. i18n (inglés), modo daltónico, auto-actualización.
+R9. Detección por micrófono con modelo neuronal para acordes densos.
+
+-------------------------------------------------------------------------------
+10. RIESGOS
+-------------------------------------------------------------------------------
+X1. El detector se validó con audio SINTETIZADO, no con el teclado real del
+    usuario. [Seguro] Timbre, parlantes y micrófono reales pueden exigir
+    ajustar la sensibilidad. Mitigación: probador de micrófono visible,
+    sensibilidad ajustable, tolerancia de octava, modo espera por defecto.
+X2. Acordes densos y pasajes rápidos por micrófono: menor exactitud.
+    Mitigación: practicar manos separadas; MIDI si el teclado lo tiene.
+X3. Archivos MIDI de internet de calidad variable (varias pistas, batería,
+    voces). Mitigación: asistente de pistas en la importación.
+X4. SmartScreen por ejecutable sin firmar: instrucciones en el README.
+===============================================================================
